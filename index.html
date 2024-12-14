@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Taj Photo</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            text-align: center;
+        }
+        #photo-container img {
+            max-width: 100%;
+            max-height: 500px;
+        }
+        #page-preview {
+            margin-top: 20px;
+            width: 600px;
+            height: 400px;
+            border: 1px solid #ddd;
+        }
+    </style>
+</head>
+<body>
+    <h1>Passport Photo Generator</h1>
+    <div id="editor-container">
+        <input type="file" id="imageInput" accept="image/*">
+        <div id="photo-container">
+            <img id="uploadedImage" src="" alt="Upload an image" style="display: none;">
+        </div>
+        <button id="cropBtn" style="display: none;">Crop & Brighten</button>
+        <div id="page-preview"></div>
+        <button id="downloadBtn" style="display: none;">Download JPEG</button>
+    </div>
+
+    <script>
+        const imageInput = document.getElementById("imageInput");
+        const uploadedImage = document.getElementById("uploadedImage");
+        const cropBtn = document.getElementById("cropBtn");
+        const pagePreview = document.getElementById("page-preview");
+        const downloadBtn = document.getElementById("downloadBtn");
+
+        let cropper;
+
+        imageInput.addEventListener("change", (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    uploadedImage.src = e.target.result;
+                    uploadedImage.style.display = "block";
+                    cropBtn.style.display = "inline-block";
+
+                    if (cropper) cropper.destroy();
+                    cropper = new Cropper(uploadedImage, {
+                        aspectRatio: 3 / 4, // 3:4 aspect ratio for passport photos
+                    });
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        cropBtn.addEventListener("click", () => {
+            if (cropper) {
+                const canvas = cropper.getCroppedCanvas({
+                    width: 354, // 3 cm in pixels at 300 DPI
+                    height: 472 // 4 cm in pixels at 300 DPI
+                });
+
+                // Brighten the image
+                const ctx = canvas.getContext("2d");
+                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                const data = imageData.data;
+                for (let i = 0; i < data.length; i += 4) {
+                    data[i] = Math.min(data[i] + 20, 255); // Red
+                    data[i + 1] = Math.min(data[i + 1] + 20, 255); // Green
+                    data[i + 2] = Math.min(data[i + 2] + 20, 255); // Blue
+                }
+                ctx.putImageData(imageData, 0, 0);
+
+                create4x6Page(canvas);
+            }
+        });
+
+        function create4x6Page(croppedCanvas) {
+            const pageCanvas = document.createElement("canvas");
+            pageCanvas.width = 1800; // 6 inches at 300 DPI
+            pageCanvas.height = 1200; // 4 inches at 300 DPI
+            const ctx = pageCanvas.getContext("2d");
+
+            const photoWidth = 354; // 3 cm in pixels at 300 DPI
+            const photoHeight = 472; // 4 cm in pixels at 300 DPI
+            const xSpacing = (pageCanvas.width - (photoWidth * 4)) / 5; // Dynamic horizontal spacing
+            const ySpacing = (pageCanvas.height - (photoHeight * 2)) / 3; // Dynamic vertical spacing
+
+            ctx.fillStyle = "white";
+            ctx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
+
+            ctx.strokeStyle = "black";
+            ctx.lineWidth = 3; // Border thickness
+
+            let xOffset = xSpacing; // Initial x-offset
+            let yOffset = ySpacing; // Initial y-offset
+
+            for (let row = 0; row < 2; row++) {
+                for (let col = 0; col < 4; col++) {
+                    ctx.drawImage(croppedCanvas, xOffset, yOffset, photoWidth, photoHeight);
+                    ctx.strokeRect(xOffset, yOffset, photoWidth, photoHeight); // Add border
+                    xOffset += photoWidth + xSpacing; // Move to the next column
+                }
+                xOffset = xSpacing; // Reset x-offset for the new row
+                yOffset += photoHeight + ySpacing; // Move to the next row
+            }
+
+            pagePreview.innerHTML = "";
+            const pageImg = document.createElement("img");
+            pageImg.src = pageCanvas.toDataURL("image/jpeg");
+            pageImg.style.width = "100%";
+            pagePreview.appendChild(pageImg);
+
+            downloadBtn.style.display = "inline-block";
+            downloadBtn.onclick = () => {
+                const link = document.createElement("a");
+                link.download = "photo_page.jpeg";
+                link.href = pageCanvas.toDataURL("image/jpeg");
+                link.click();
+            };
+        }
+    </script>
+</body>
+</html>
